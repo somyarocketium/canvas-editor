@@ -124,19 +124,21 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 	};
 
 	const setCurrentTimeFrame = (t: number) => {
-		// Find the video element
-		const videoObj = canvas.getObjects().find(obj => obj.data && obj.data.type === 'video');
-		const element = currentSelectedElements[0];
-		const htmlVideoElement = videoObj ? (videoObj as any).getElement() : null;
-		const value = interpolatePropertyValue(keyframes, t, 'left');
-		console.log(`Setting left position to : ${value}`);
-		element.set('left', value as number);
-		// Check if the video duration is sufficient for the current time
-		if (htmlVideoElement && t <= htmlVideoElement.duration) {
-			htmlVideoElement.currentTime = t;
-			console.log('video time', htmlVideoElement.currentTime, 'animation time', t);
-		}
-
+		const canvasObjects = canvas.getObjects();
+		canvasObjects.forEach(obj => {
+			if (obj.data && obj.data.type === 'video') {
+				const videoElement = (obj as any).getElement();
+				if (t <= videoElement.duration) {
+					videoElement.currentTime = t;
+				}
+			} else {
+				const { keyframes } = obj.data;
+				if (keyframes && keyframes.length > 0) {
+					const value = interpolatePropertyValue(keyframes, t, 'left');
+					obj.set('left', value as number);
+				}
+			}
+		});
 		canvas.renderAll();
 	};
 
