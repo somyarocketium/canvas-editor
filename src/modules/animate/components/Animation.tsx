@@ -26,6 +26,7 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 	const [fps, setFps] = useState<number>(30);
 	const [isPlaying, setIsPlaying] = useState<boolean>(false);
 	const [timemark, setTimemark] = useState<number>(0);
+	const [timelinePoint, setTimelinePoint] = useState<number>(0);
 	const [loaded, setLoaded] = useState(false);
 	const [progress, setProgress] = useState({
 		percent: 0,
@@ -122,11 +123,27 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 		});
 	};
 
+	const setCurrentTimeFrame = (t: number) => {
+		// Find the video element
+		const videoObj = canvas.getObjects().find(obj => obj.data && obj.data.type === 'video');
+		const element = currentSelectedElements[0];
+		const htmlVideoElement = videoObj ? (videoObj as any).getElement() : null;
+		const value = interpolatePropertyValue(keyframes, t, 'left');
+		console.log(`Setting left position to : ${value}`);
+		element.set('left', value as number);
+		// Check if the video duration is sufficient for the current time
+		if (htmlVideoElement && t <= htmlVideoElement.duration) {
+			htmlVideoElement.currentTime = t;
+			console.log('video time', htmlVideoElement.currentTime, 'animation time', t);
+		}
+
+		canvas.renderAll();
+	};
+
 	const playAnimation = () => {
 		const frameRate = fps;
 		const frameDuration = Number((1000 / frameRate).toFixed(2));
 		console.log('frameDuration', frameDuration);
-		let lastFrameTime = 0;
 
 		const element = currentSelectedElements[0];
 		if (!element) {
@@ -139,8 +156,6 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 			return;
 		}
 
-		const kf = [...keyframes].sort((a: Keyframe, b: Keyframe) => a.timeMark - b.timeMark);
-
 		// Find the video element
 		const videoObj = canvas.getObjects().find(obj => obj.data && obj.data.type === 'video');
 		const htmlVideoElement = videoObj ? (videoObj as any).getElement() : null;
@@ -152,29 +167,24 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 		}
 
 		const onVideoReady = () => {
+			let lastFrameTime = 0;
+			let startTime = 0;
 			setIsPlaying(true);
-			let t = 0;
 			if (htmlVideoElement) {
 				htmlVideoElement.currentTime = 0;
 				htmlVideoElement?.play();
 			}
 			const animate = (currentTime: number) => {
-				if (currentTime - lastFrameTime > frameDuration) {
-					const value = interpolatePropertyValue(kf, t, 'left');
-					element.set('left', value as number);
-					// Check if the video duration is sufficient for the current time
-					if (htmlVideoElement && t <= htmlVideoElement.duration) {
-						htmlVideoElement.currentTime = t;
-						console.log('video time', htmlVideoElement.currentTime, 'animation time', t);
-					}
-
-					canvas.renderAll();
-
-					t = Number((t + frameDuration / 1000).toFixed(2));
-					lastFrameTime = currentTime;
+				const presentTime = lastFrameTime === 0 ? 0 : (currentTime - startTime) / 1000;
+				console.log(`Rendering currentTime : ${presentTime}`);
+				setCurrentTimeFrame(presentTime);
+				setTimelinePoint(presentTime);
+				if (lastFrameTime === 0) {
+					startTime = currentTime;
 				}
+				lastFrameTime = currentTime;
 
-				if (t < duration / 1000) {
+				if (presentTime < duration / 1000) {
 					requestAnimationFrame(animate);
 				} else {
 					setIsPlaying(false);
@@ -182,7 +192,6 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 					console.debug('Animation ended');
 				}
 			};
-
 			requestAnimationFrame(animate);
 		};
 
@@ -478,6 +487,24 @@ const Animation = ({ currentSelectedElements, saveArtboardChanges, canvas }: Ani
 					stepHoldInterval={100}
 				/>
 			</Group>
+
+			<Stack>
+				<SectionTitle>Timeline</SectionTitle>
+				<Slider
+					pt="xl"
+					value={timelinePoint}
+					onChange={value => {
+						setTimelinePoint(value);
+						setCurrentTimeFrame(value);
+					}}
+					step={0.1}
+					min={0}
+					max={duration / 1000}
+					precision={1}
+					w={'100%'}
+					labelAlwaysOn
+				/>
+			</Stack>
 
 			<Popover
 				position="left-end"
